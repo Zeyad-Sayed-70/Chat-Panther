@@ -7,6 +7,8 @@ const fs = require('fs');
 export class ChatService {
   private driver: WebDriver;
   private url = "https://huggingface.co/chat"
+  private init_try_counter = 0
+  private sendPrompt_try_counter = 0
 
   constructor() {
     this.initDriver();
@@ -25,7 +27,6 @@ export class ChatService {
         .forBrowser('chrome')
         .setChromeOptions(options)
         .build();
-
 
       const url = this.url
       const COOKIES = [
@@ -51,31 +52,30 @@ export class ChatService {
         }
       ]
 
-      try {
-        // Add the cookies before visit the page
-        COOKIES.forEach( async (cookie) => {
-          await this.driver.manage().addCookie(cookie)
-        })
+      // Add the cookies before visit the page
+      COOKIES.forEach( async (cookie) => {
+        await this.driver.manage().addCookie(cookie)
+      })
 
-        // Visit the page
-        await this.driver.get(url);
-      } catch (error) {
-        console.log(error)
-      }
+      // Visit the page
+      await this.driver.get(url);
 
       // Wait until the page to be changing
       await this.driver.wait(until.urlIs('https://huggingface.co/chat/'), 10000);
       
       console.log("Current URL: ", await this.driver.getCurrentUrl())
     } catch (error) {
-      throw new HttpException(error.message, error.status);
+      if ( this.init_try_counter < 3 ) {
+        this.init_try_counter += 1
+        this.initDriver()
+      } else throw new HttpException(error.message, error.status);
     }
   }
 
   async sendPrompt(prompt: string) {
     try {
       await this.driver.navigate().refresh()
-      await this.takeScreenShot()
+      
       try {
         // Wait and Press go to login page btn
         const XPATH_GO_TO_LOGIN_BUTTON = '/html/body/div[2]/div/div/div/div/form/button'
@@ -86,13 +86,14 @@ export class ChatService {
         console.log(error)
       }
       
-      // Get the prompt textarea
+      // Interact with prompt textarea
       const XPATH_PTOMPT_TEXTAREA = '//*[@id="app"]/div[1]/div/div[2]/div/form/div/div/textarea';
       await this.driver.wait(until.elementLocated(By.xpath(XPATH_PTOMPT_TEXTAREA)), 30000)
       const promptTextarea = await this.driver.findElement(By.xpath(XPATH_PTOMPT_TEXTAREA))
       await promptTextarea.sendKeys(prompt)
       await promptTextarea.sendKeys(Key.RETURN)
 
+      // Waitting the loading button to appear 
       const XPATH_WAITING_BUTTON = '//*[@id="app"]/div[1]/div/div[2]/div/div[1]/button'
       await this.driver.wait(until.elementsLocated(By.xpath(XPATH_WAITING_BUTTON)), 10000)
 
@@ -101,7 +102,7 @@ export class ChatService {
       while(isWaitingBtnDisplayed) {
         try {
           const waitingButton = await this.driver.findElement(By.xpath(XPATH_WAITING_BUTTON));
-          console.log(await waitingButton.getText());
+          // console.log(await waitingButton.getText());
           isWaitingBtnDisplayed = await waitingButton.isDisplayed();
         } catch (error) {
           if (error.name === 'StaleElementReferenceError') {
@@ -110,29 +111,39 @@ export class ChatService {
             isWaitingBtnDisplayed = false;
           }
         }
-        await this.driver.sleep(100)
+        await this.driver.sleep(200)
       }
-
-      console.log("Success operation.");
-      // await this.takeScreenShot()
 
       const firstMessage = await this.driver.findElement(By.xpath('//*[@id="app"]/div[1]/div/div[1]/div/div/div[2]/div[1]'))
       const result = await firstMessage.getText()
 
-      try {
-        console.log(await this.driver.getCurrentUrl())
-        await this.driver.navigate().to(this.url)
-        console.log(await this.driver.getCurrentUrl())
-        await this.takeScreenShot()
+      console.log(await this.driver.getCurrentUrl())
+      await this.driver.navigate().to(this.url)
+      console.log(await this.driver.getCurrentUrl())
       
-      } catch (error) {
-        console.log(error)
-      }
-
+      console.log("Success operation.");
+      
       return result
     } catch (error) {
-      console.log(error);
-      throw new HttpException(error.message, 400);
+      /*
+        When error happen
+        1. Navigate to chat page. if the session id found
+        2. Init the driver again. if the session id is not found
+        3. After 3 tries, return an error (may the server needs restart)
+      */
+        console.log(error);
+        const session_id = await this.driver.getSession().then(session => session.getId(), () => null);
+        if (this.sendPrompt_try_counter < 3) {
+          this.sendPrompt_try_counter += 1;
+          if (session_id) {
+            await this.driver.navigate().to(this.url);
+          } else {
+            await this.initDriver();
+          }
+        } else {
+          // Properly handle the release of resources here
+          throw new HttpException('Server may need a restart', 400);
+        }
     }
   }
 
