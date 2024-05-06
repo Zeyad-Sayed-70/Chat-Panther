@@ -13,17 +13,14 @@ export class ChatController {
   }
 
   @Post()
-  async getProfile(
-    @Query('url') url: string,
+  async chatting(
     @Body() body: PostChatDto,
     @Res() res: Response,
   ) {
-    if (!url) return res.status(404).json({ message: 'url is not found' });
     if (!body.prompt)
       return res.status(404).json({ message: 'prompt is not found' });
 
-    const profileData = await this.ChatService.extractProfileData(
-      url,
+    const profileData = await this.ChatService.sendPrompt(
       body.prompt,
     );
     res.json(profileData);

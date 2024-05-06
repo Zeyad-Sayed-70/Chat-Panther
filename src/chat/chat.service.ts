@@ -1,10 +1,12 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { Builder, By, Key, WebDriver, until } from 'selenium-webdriver';
 import * as chrome from 'selenium-webdriver/chrome';
+const fs = require('fs');
 
 @Injectable()
 export class ChatService {
   private driver: WebDriver;
+  private url = "https://huggingface.co/chat"
 
   constructor() {
     this.initDriver();
@@ -14,65 +16,173 @@ export class ChatService {
     try {
       const options = new chrome.Options();
 
-      // options.addArguments('--headless');
-      options.addArguments('--no-sandbox');
-      options.addArguments('--disable-dev-shm-usage');
-      options.addArguments('--user-data-dir=/tmp/chrome-user-data');
-      options.addArguments('--user-data-dir=/path/to/new/user/profile');
+      options.addArguments('--headless');
+      options.addArguments('--window-size=1024,768');
+      options.addArguments("--disable-dev-shm-usage"); // Disable /dev/shm usage
+      options.addArguments("--no-sandbox"); // Bypass OS security model
 
       this.driver = await new Builder()
         .forBrowser('chrome')
         .setChromeOptions(options)
         .build();
+
+
+      const url = this.url
+      const COOKIES = [
+        {
+            "name": "token",
+            "value": "jVSGeJWjWFYXlhlSxiDYctMKaSkWoTaNrsJNMgqPerVCNmItPqNjHxHhuWUjmDFVDPWKdIivKwaUOolbxgwbQpyglFMnDfdFujZxomdSELkbzoXZhBccgJKtIISIegPM"
+        },
+        {
+            "name": "aws-waf-token",
+            "value": "5a35d0c4-c4dd-4097-85cf-1f3dbabc54be:CQoAnutpGAJtAQAA:yGxETYQEFq9iUHbbHStDZNbhh8EdoBEKJI+rn395w9N2L57sjaVXUNzv8tDbxBjgdXpApU1fg24S/HwVQAUMGX6+3yI4N3DjeRF9PmuFv4aUAsaW1iHYvnmOM/FL9s7+98ZzaV+MK9I0pJ6MLQGg+D2X7b7inDmBT9MZmOA2AbKWYyhfZ9NM/qf+XBoyqkRkr8s+urbYmJBGVPgxZ1AEQijtMOxBlrDWEXnkfIruPjV0UzkWL1qdFOMAfBeFOcdEofsaM5s="
+        },
+        {
+            "name": "__stripe_sid",
+            "value": "5c11a82b-7107-407d-ae83-6107469a65f3eaa23c"
+        },
+        {
+            "name": "hf-chat",
+            "value": "79afd632-9c0b-4a91-bc2b-30a4e7d225ef"
+        },
+        {
+            "name": "__stripe_mid",
+            "value": "5e683403-4e4b-4468-a4e6-fd3b0756158022382d"
+        }
+      ]
+
+      try {
+        // Add the cookies before visit the page
+        COOKIES.forEach( async (cookie) => {
+          await this.driver.manage().addCookie(cookie)
+        })
+
+        // Visit the page
+        await this.driver.get(url);
+      } catch (error) {
+        console.log(error)
+      }
+
+      // Wait until the page to be changing
+      await this.driver.wait(until.urlIs('https://huggingface.co/chat/'), 10000);
+      
+      console.log("Current URL: ", await this.driver.getCurrentUrl())
     } catch (error) {
       throw new HttpException(error.message, error.status);
     }
   }
 
-  async extractProfileData(url: string, prompt: string) {
+  async sendPrompt(prompt: string) {
     try {
-      console.log(url);
-
-      // Visit the page
-      await this.driver.get(url);
-
-      const SL_PROMPT_INPUT = 'div > div > div > div > div > textarea';
-
-      // Enter a prompt & press enter
-      const prompt_input = await this.driver.findElement(
-        By.css(SL_PROMPT_INPUT),
-      );
-
-      if (await prompt_input.isDisplayed()) {
-        prompt_input.sendKeys(prompt, Key.ENTER);
-      } else return this.extractProfileData(url, prompt);
-
-      // Reading the last response
-      const SL_LAST_RESPONSE =
-        'div > div > div.grow > div > div.h-full.flex.flex-col > div > div > div > div:nth-child(3) > div > div > div.border.px-md.py-sm.rounded-lg.break-words.\\[word-break\\:break-word\\].text-left.max-w-full.shadow-sm.border-borderMain\\/50.ring-borderMain\\/50.divide-borderMain\\/50.dark\\:divide-borderMainDark\\/50.dark\\:ring-borderMainDark\\/50.dark\\:border-borderMainDark\\/50.bg-offset.dark\\:bg-offsetDark > div.default.font-sans.text-base.text-textMain.dark\\:text-textMainDark.selection\\:bg-superDuper.selection\\:text-textMain > div';
-      const SL_COPY_BUTTON =
-        'div > div > div > div:nth-child(3) > div > div > div.flex.items-start.ml-sm.mt-xs.gap-x-xs.max-w-full > button';
-
-      // Copy button - will appear after the message done streaming
-      await this.driver.wait(
-        until.elementLocated(By.css(SL_COPY_BUTTON)),
-        30000,
-      );
-      const copy_button = await this.driver.findElement(By.css(SL_COPY_BUTTON));
-
-      console.log(await copy_button.isDisplayed());
-
-      if (await copy_button.isDisplayed()) {
-        const last_response = await this.driver.findElement(
-          By.css(SL_LAST_RESPONSE),
-        );
-
-        return await last_response.getText();
+      await this.driver.navigate().refresh()
+      await this.takeScreenShot()
+      try {
+        // Wait and Press go to login page btn
+        const XPATH_GO_TO_LOGIN_BUTTON = '/html/body/div[2]/div/div/div/div/form/button'
+        await this.driver.wait(until.elementLocated(By.xpath(XPATH_GO_TO_LOGIN_BUTTON)), 5000)
+        const goToLogin = await this.driver.findElement(By.xpath(XPATH_GO_TO_LOGIN_BUTTON));
+        await goToLogin.click()
+      } catch (error) {
+        console.log(error)
       }
+      
+      // Get the prompt textarea
+      const XPATH_PTOMPT_TEXTAREA = '//*[@id="app"]/div[1]/div/div[2]/div/form/div/div/textarea';
+      await this.driver.wait(until.elementLocated(By.xpath(XPATH_PTOMPT_TEXTAREA)), 30000)
+      const promptTextarea = await this.driver.findElement(By.xpath(XPATH_PTOMPT_TEXTAREA))
+      await promptTextarea.sendKeys(prompt)
+      await promptTextarea.sendKeys(Key.RETURN)
+
+      const XPATH_WAITING_BUTTON = '//*[@id="app"]/div[1]/div/div[2]/div/div[1]/button'
+      await this.driver.wait(until.elementsLocated(By.xpath(XPATH_WAITING_BUTTON)), 10000)
+
+      // Check sending message loading
+      let isWaitingBtnDisplayed = true;
+      while(isWaitingBtnDisplayed) {
+        try {
+          const waitingButton = await this.driver.findElement(By.xpath(XPATH_WAITING_BUTTON));
+          console.log(await waitingButton.getText());
+          isWaitingBtnDisplayed = await waitingButton.isDisplayed();
+        } catch (error) {
+          if (error.name === 'StaleElementReferenceError') {
+            console.log('Element became stale. Re-locating...');
+          } else {
+            isWaitingBtnDisplayed = false;
+          }
+        }
+        await this.driver.sleep(100)
+      }
+
+      console.log("Success operation.");
+      // await this.takeScreenShot()
+
+      const firstMessage = await this.driver.findElement(By.xpath('//*[@id="app"]/div[1]/div/div[1]/div/div/div[2]/div[1]'))
+      const result = await firstMessage.getText()
+
+      try {
+        console.log(await this.driver.getCurrentUrl())
+        await this.driver.navigate().to(this.url)
+        console.log(await this.driver.getCurrentUrl())
+        await this.takeScreenShot()
+      
+      } catch (error) {
+        console.log(error)
+      }
+
+      return result
     } catch (error) {
-      console.log(error.message, error.status);
+      console.log(error);
       throw new HttpException(error.message, 400);
     }
+  }
+
+  async loginToHuggingFace() {
+      console.log(await this.driver.getCurrentUrl())
+      await this.takeScreenShot()
+      
+      // Wait until the page navigating to login page
+      await this.driver.wait(until.urlContains('https://huggingface.co/login'), 30000)
+      
+      // Fill in the login credentials
+      const XPATH_USERNAME_INPUT = '/html/body/div/main/div/section/form/div[1]/label[1]/input'
+      await this.driver.wait(until.elementLocated(By.xpath(XPATH_USERNAME_INPUT)), 30000)
+      const usernameInput = await this.driver.findElement(By.xpath(XPATH_USERNAME_INPUT));
+      await usernameInput.sendKeys('zeyad67sayed@gmail.com');
+
+      console.log(await this.driver.getCurrentUrl())
+      await this.takeScreenShot()
+      
+      // Sleep
+      await this.driver.sleep(2314)
+
+      const XPATH_PASSWORD_INPUT = '/html/body/div/main/div/section/form/div[1]/label[2]/input'
+      await this.driver.wait(until.elementLocated(By.xpath(XPATH_PASSWORD_INPUT)), 30000)
+      const passwordInput = await this.driver.findElement(By.xpath(XPATH_PASSWORD_INPUT));
+      await passwordInput.sendKeys('wH4LM7SJxH_:2NB');
+
+      // Sleep
+      await this.driver.sleep(3028)
+      await this.takeScreenShot()
+
+      // Submit the login form
+      const loginButton = await this.driver.findElement(By.xpath('/html/body/div/main/div/section/form/div[2]/button'));
+      await loginButton.click();
+
+      // Get the cookies after successful login
+      const cookies = await this.driver.manage().getCookies();
+      await this.takeScreenShot()
+      return cookies
+  }
+
+  async takeScreenShot() {
+    // Take a screenshot and obtain it as a base64 string
+    let base64String = await this.driver.takeScreenshot();
+      
+    // Save the screenshot to a file
+    const n = Math.random() * 99999
+    fs.writeFileSync(`screenshot-${n}.png`, base64String, 'base64')
+      
+    console.log(`Screenshot saved as screenshot-${n}.png`);
   }
 
   async clearData() {
