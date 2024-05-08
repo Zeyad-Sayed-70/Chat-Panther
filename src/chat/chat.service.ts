@@ -72,9 +72,10 @@ export class ChatService {
     }
   }
 
-  async sendPrompt(prompt: string) {
+  async sendPrompt(prompt: string, search_from_internet: boolean) {
     try {
       await this.driver.navigate().refresh()
+      const start_timestamp = new Date().getTime()
       
       try {
         // Wait and Press go to login page btn
@@ -84,6 +85,18 @@ export class ChatService {
         await goToLogin.click()
       } catch (error) {
         console.log(error)
+      }
+
+      // Check search_from_internet
+      if ( search_from_internet ) {
+        try {
+          const XPATH_SEARCH_FROM_INTERNET_BUTTON = '//*[@id="app"]/div[1]/div/div[2]/div/div[1]/div[1]/div[1]'
+          await this.driver.wait(until.elementLocated(By.xpath(XPATH_SEARCH_FROM_INTERNET_BUTTON)), 10000)
+          const search_from_internet_btn = await this.driver.findElement(By.xpath(XPATH_SEARCH_FROM_INTERNET_BUTTON))
+          search_from_internet_btn.click()
+        } catch (error) {
+          console.log(error)
+        }
       }
       
       // Interact with prompt textarea
@@ -117,13 +130,32 @@ export class ChatService {
       const firstMessage = await this.driver.findElement(By.xpath('//*[@id="app"]/div[1]/div/div[1]/div/div/div[2]/div[1]'))
       const result = await firstMessage.getText()
 
-      console.log(await this.driver.getCurrentUrl())
       await this.driver.navigate().to(this.url)
-      console.log(await this.driver.getCurrentUrl())
       
       console.log("Success operation.");
       
-      return result
+      // Calc finish timestamp
+      const finish_timestamp = new Date().getTime()
+      
+      // Init model name
+      let modelName = ''
+
+      try {
+        // Get the model name
+        const XPATH_MODEL_NAME = '//*[@id="app"]/div[1]/div/div[1]/div/div/div[2]/div/div[1]/div/div[2]'
+        const modelElement = await this.driver.findElement(By.xpath(XPATH_MODEL_NAME))
+        modelName = await modelElement.getText()
+      } catch (error) {
+        console.log(error)
+      }
+
+      return {
+        model: modelName,
+        start_timestamp,
+        finish_timestamp,
+        used_internet_search: search_from_internet,
+        result
+      }
     } catch (error) {
       /*
         When error happen

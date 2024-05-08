@@ -22,6 +22,7 @@ export class ChatController {
 
     const profileData = await this.ChatService.sendPrompt(
       body.prompt,
+      body.search_from_internet || false
     );
     res.json(profileData);
   }
