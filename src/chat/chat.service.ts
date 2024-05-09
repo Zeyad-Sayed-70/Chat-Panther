@@ -125,10 +125,15 @@ export class ChatService {
           // console.log(await waitingButton.getText());
           isWaitingBtnDisplayed = await waitingButton.isDisplayed();
         } catch (error) {
-          isWaitingBtnDisplayed = false;
+          if (error.name === 'StaleElementReferenceError') {
+            console.log('Element became stale. Re-locating...');
+          } else {
+            isWaitingBtnDisplayed = false;
+          }
         }
         await this.driver.sleep(200)
       }
+      await this.driver.sleep(2000)
       Logger.log("Finish Checking send message loading")
       
       const firstMessage = await this.driver.findElement(By.xpath('//*[@id="app"]/div[1]/div/div[1]/div/div/div[2]/div[1]'))
