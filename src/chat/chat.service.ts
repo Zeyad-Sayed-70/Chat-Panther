@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { Builder, By, Key, WebDriver, until } from 'selenium-webdriver';
 import * as chrome from 'selenium-webdriver/chrome';
 const fs = require('fs');
@@ -78,39 +78,46 @@ export class ChatService {
       const start_timestamp = new Date().getTime()
       
       try {
+        Logger.log("Start checking go to login page button")
         // Wait and Press go to login page btn
         const XPATH_GO_TO_LOGIN_BUTTON = '/html/body/div[2]/div/div/div/div/form/button'
         await this.driver.wait(until.elementLocated(By.xpath(XPATH_GO_TO_LOGIN_BUTTON)), 5000)
         const goToLogin = await this.driver.findElement(By.xpath(XPATH_GO_TO_LOGIN_BUTTON));
         await goToLogin.click()
       } catch (error) {
+        Logger.error("Finish checking go to login page button, its not found")
         console.log(error)
       }
 
       // Check search_from_internet
       if ( search_from_internet ) {
         try {
+          Logger.log("Start Find & interact with search from internet button")
           const XPATH_SEARCH_FROM_INTERNET_BUTTON = '//*[@id="app"]/div[1]/div/div[2]/div/div[1]/div[1]/div[1]'
           await this.driver.wait(until.elementLocated(By.xpath(XPATH_SEARCH_FROM_INTERNET_BUTTON)), 10000)
           const search_from_internet_btn = await this.driver.findElement(By.xpath(XPATH_SEARCH_FROM_INTERNET_BUTTON))
           search_from_internet_btn.click()
         } catch (error) {
+          Logger.error("Finish Find & interact with search from internet button, its not found")
           console.log(error)
         }
       }
       
       // Interact with prompt textarea
+      Logger.log("Start Find & interact with prompt textarea")
       const XPATH_PTOMPT_TEXTAREA = '//*[@id="app"]/div[1]/div/div[2]/div/form/div/div/textarea';
       await this.driver.wait(until.elementLocated(By.xpath(XPATH_PTOMPT_TEXTAREA)), 30000)
       const promptTextarea = await this.driver.findElement(By.xpath(XPATH_PTOMPT_TEXTAREA))
       await promptTextarea.sendKeys(prompt)
       await promptTextarea.sendKeys(Key.RETURN)
+      Logger.log("Finish Find & interact with prompt textarea")
 
       // Waitting the loading button to appear 
       const XPATH_WAITING_BUTTON = '//*[@id="app"]/div[1]/div/div[2]/div/div[1]/button'
       await this.driver.wait(until.elementsLocated(By.xpath(XPATH_WAITING_BUTTON)), 10000)
 
       // Check sending message loading
+      Logger.log("Start Checking send message loading")
       let isWaitingBtnDisplayed = true;
       while(isWaitingBtnDisplayed) {
         try {
@@ -126,13 +133,15 @@ export class ChatService {
         }
         await this.driver.sleep(200)
       }
-
+      Logger.log("Finish Checking send message loading")
+      
       const firstMessage = await this.driver.findElement(By.xpath('//*[@id="app"]/div[1]/div/div[1]/div/div/div[2]/div[1]'))
       const result = await firstMessage.getText()
-
+      
       await this.driver.navigate().to(this.url)
       
-      console.log("Success operation.");
+      Logger.log("Success operation")
+      console.log("Success operation");
       
       // Calc finish timestamp
       const finish_timestamp = new Date().getTime()
