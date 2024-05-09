@@ -125,11 +125,7 @@ export class ChatService {
           // console.log(await waitingButton.getText());
           isWaitingBtnDisplayed = await waitingButton.isDisplayed();
         } catch (error) {
-          if (error.name === 'StaleElementReferenceError') {
-            console.log('Element became stale. Re-locating...');
-          } else {
-            isWaitingBtnDisplayed = false;
-          }
+          isWaitingBtnDisplayed = false;
         }
         await this.driver.sleep(200)
       }
